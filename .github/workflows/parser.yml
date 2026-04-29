@@ -1,0 +1,46 @@
+name: Ежедневный парсинг HH.ru
+
+on:
+  schedule:
+    # Каждый день в 6:00 UTC = 9:00 МСК
+    - cron: '0 6 * * *'
+  workflow_dispatch:   # позволяет запускать вручную
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Клонирование репозитория
+        uses: actions/checkout@v4
+
+      - name: Установка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установка зависимостей
+        run: pip install -r requirements.txt
+
+      - name: Скачать предыдущую БД (если есть)
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: parser.yml
+          name: hh-data
+          path: .
+
+      - name: Запуск парсера
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+        run: python main.py
+
+      - name: Загрузить обновлённую БД и токен
+        uses: actions/upload-artifact@v4
+        with:
+          name: hh-data
+          path: |
+            hh_vacancies.db
+            hh_token.json
+          retention-days: 7
