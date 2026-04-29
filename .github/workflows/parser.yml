@@ -2,9 +2,8 @@ name: Ежедневный парсинг HH.ru
 
 on:
   schedule:
-    # Каждый день в 6:00 UTC = 9:00 МСК
     - cron: '0 6 * * *'
-  workflow_dispatch:   # позволяет запускать вручную
+  workflow_dispatch:
 
 jobs:
   parse:
@@ -13,6 +12,8 @@ jobs:
     steps:
       - name: Клонирование репозитория
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true   # чтобы git push сработал
 
       - name: Установка Python
         uses: actions/setup-python@v5
@@ -22,25 +23,18 @@ jobs:
       - name: Установка зависимостей
         run: pip install -r requirements.txt
 
-      - name: Скачать предыдущую БД (если есть)
-        continue-on-error: true
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: parser.yml
-          name: hh-data
-          path: .
-
       - name: Запуск парсера
         env:
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: python main.py
 
-      - name: Загрузить обновлённую БД и токен
-        uses: actions/upload-artifact@v4
-        with:
-          name: hh-data
-          path: |
-            hh_vacancies.db
-            hh_token.json
-          retention-days: 7
+      - name: Коммит и пуш обновлённых файлов
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add hh_vacancies.db hh_token.json
+          git diff --staged --quiet || (
+            git commit -m "Автообновление БД и токена $(date +'%Y-%m-%d')" &&
+            git push
+          )
